@@ -1,0 +1,178 @@
+---
+title: "Lab 2"
+author: "Urminder Singh"
+date: "March 2, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message = FALSE,warning = FALSE)
+```
+
+# Data
+
+I downloaded the data from https://archive.ics.uci.edu/ml/datasets/Optical+Recognition+of+Handwritten+Digits. I used the optdigits.tra as training set and optdigits.tes as test set. Further, I divided training data into two non-overlapping parts having 80% and 20% data respectively. Then I used the partition with 80% data as training set to train the models and 20% data as a validation set for the models.
+
+#Experiment 1a
+
+For Experiment 1 I chose the hidden layers to be ReLU and I changed other parameters. I iterated over combinations of following parameters and buit models and tested them.
+
+## Parameters
+  * Error Function: Quadratic, CrossEntropy
+  * Hidden Layers: 1, 2, 3
+  * Hidden Units: 100, 200, 300
+  * Learning Rate: 0.005, 0.01
+  * Momentum Start: 0, 0.5
+  * Input Scaling: True, False
+
+I wrote the attached R code for simulation. The results are described in Table 1. 
+
+## Experiment 1a R code
+
+```{r,tidy=TRUE}
+library("magrittr", lib.loc="~/R/x86_64-pc-linux-gnu-library/3.4")
+library(h2o)
+library(data.table)
+train <- fread("optdigits.tra",stringsAsFactors = T,colClasses = c(rep('numeric',64),'character'))
+test<-fread("optdigits.tes",stringsAsFactors = T,colClasses = c(rep('numeric',64),'character'))
+h2o.init(nthreads=-1, enable_assertions = FALSE)
+#Divide into train and test/validation
+c.train <- train[1:(nrow(train)*.8),]
+c.validation  <- train[(nrow(train)*.2):nrow(train),]
+#data to h2o cluster
+train.h2o <- as.h2o(c.train)
+validation.h2o <- as.h2o(c.validation)
+test.h2o <- as.h2o(test)
+#last variable is the class category
+y.dep<-"V65"
+predictors<-setdiff(names(c.train), y.dep)
+######Set model hyper-parameters
+#hiddenLayers<-c(1,2,3)
+#hiddenUnits<-c(100,200,300)
+#learningRates<-c(0.005,0.01)
+#momentumStart<-c(0,0.5)
+#inputScaling<-c(T,F)
+#errorFunc<-c("Quadratic","CrossEntropy")
+hiddenLayers<-c(1,2)
+hiddenUnits<-c(100,200)
+learningRates<-c(0.01)
+momentumStart<-c(0)
+inputScaling<-c(T)
+errorFunc<-c("Quadratic")
+##Table to write results
+header1<-c("Error func","#layers","#hiddenUnits","learnRate","momentumStart","Scale","Acc_val","Acc_test","Time(min)")
+resultsTab<-data.frame(matrix(ncol = 9, nrow = 0))
+colnames(resultsTab)<-header1
+#set seed for reproducible results
+set.seed(1263)
+#save the best model i.e. highest accuraccy on test set
+bestModel<-NULL
+bestAcc<-0
+#make all comniations of the parameters
+for(errF in errorFunc){
+  for(hL in hiddenLayers){
+    for(hU in hiddenUnits){
+      for(lR in learningRates){
+        for(mS in momentumStart){
+          for(iS in inputScaling){
+            
+            #build model and calculate accuraccy
+            s <- proc.time() #start time
+            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = "Rectifier",epochs = 100,loss=errF,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
+            d <- proc.time()  - s #end time
+            #print("Model training metrics")
+            #model1@model$training_metrics
+            #print("Model validation metrics")
+            #model1@model$validation_metrics
+            #model1@model$training_metrics@metrics$model_category
+            #h2o.confusionMatrix(model1)
+            #test on testdata
+            cat("Performance on test data:")
+            perf<-h2o.performance(model1,test.h2o)
+            perf
+            #compute accuraccy on validation
+            valResult <- h2o.predict(model1, validation.h2o,y=y.dep)
+            predictions<-as.data.frame(valResult[,1])
+            trueLabels<-c.validation$V65
+            correct<-0
+            for(i in 1:dim(predictions)[1]){
+              if(as.numeric(predictions$predict[i])==as.numeric(c.validation$V65[i])){
+                correct<-correct+1
+              }
+            }
+            acc_V<-format(correct/dim(predictions)[1],digits = 4)
+            cat("Accuraccy on validation set:",acc_V)
+            #compute accuraccy on test
+            testResult <- h2o.predict(model1, test.h2o,y=y.dep)
+            predictions<-as.data.frame(testResult[,1])
+            trueLabels<-test$V65
+            correct<-0
+            for(i in 1:dim(predictions)[1]){
+              if(as.numeric(predictions$predict[i])==as.numeric(test$V65[i])){
+                correct<-correct+1
+              }
+            }
+            acc<-format(correct/dim(predictions)[1],digits = 4)
+            cat("Accuraccy on test set:",acc)
+            resultsTab[nrow(resultsTab)+1,] <- c(errF,hL,hU,lR,mS,iS,acc_V,acc,format(as.numeric(d)[3]/60,digits = 2))
+            
+            if(acc>bestAcc){
+              bestModel<-model1
+              bestAcc<acc
+            }
+          }
+        }
+      }
+    }
+  }
+}
+resultsTab %>% knitr::kable(caption = "Experiment 1 outcomes. Hidden units were ReLU.")
+
+```
+
+From Table 1 we can see that the model with highest accuraccy had following parameters: `r resultsTab[which.max(resultsTab$Acc_test),]`.
+
+
+### Experiment 1a. Best model confusion matrix and model summary
+```{r,tidy=TRUE}
+bestModel
+```
+
+### Experiment 1a. Best model confusion matrix on test set
+
+```{r,tidy=TRUE}
+h2o.confusionMatrix(bestModel,test.h2o)
+```
+
+### Experiment 1a. Plots of hyperparameters with respect to test accuraccy
+
+```{r,tidy=TRUE}
+par(mfrow=c(2,2))
+plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$`#hiddenUnits`,xlab="Hidden units",type="p",col="red",pch=16)
+plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$`#layers`,xlab="Hidden layers",type="p",col="red",pch=16)
+plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$learnRate,xlab="Rate",type="p",col="red",pch=16)
+plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$momentumStart,xlab="Mom. Start",type="p",col="red",pch=16)
+par(mfrow=c(1,1))
+```
+
+#Experiment 1b
+
+For Experiment 1 I chose the hidden layers to be ReLU and I changed other parameters. I iterated over combinations of following parameters and buit models and tested them.
+
+## Parameters
+  * Error Function: Quadratic, CrossEntropy
+  * Hidden Layers: 1, 2, 3
+  * Hidden Units: 100, 200, 300
+  * Learning Rate: 0.005, 0.01
+  * Momentum Start: 0, 0.5
+  * Input Scaling: True, False
+
+I wrote the attached R code for simulation. The results are described in Table 1. 
+
+## Experiment 1b R code
+
+
+```{r,tidy=TRUE}
+#shutdown h2o
+h2o.shutdown(prompt=FALSE)
+```
