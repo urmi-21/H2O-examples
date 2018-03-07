@@ -47,20 +47,20 @@ test.h2o <- as.h2o(test)
 y.dep<-"V65"
 predictors<-setdiff(names(c.train), y.dep)
 ######Set model hyper-parameters
-#hiddenLayers<-c(1,2,3)
-#hiddenUnits<-c(100,200,300)
-#learningRates<-c(0.005,0.01)
-#momentumStart<-c(0,0.5)
-#inputScaling<-c(T,F)
-#errorFunc<-c("Quadratic","CrossEntropy")
-hiddenLayers<-c(1,2)
-hiddenUnits<-c(100,200)
-learningRates<-c(0.01)
-momentumStart<-c(0)
-inputScaling<-c(T)
-errorFunc<-c("Quadratic")
+hiddenLayers<-c(1,2,3)
+hiddenUnits<-c(100,200,300)
+learningRates<-c(0.005,0.01)
+momentumStart<-c(0,0.5)
+inputScaling<-c(T,F)
+errorFunc<-c("Quadratic","CrossEntropy")
+#hiddenLayers<-c(1)
+#hiddenUnits<-c(100,200)
+#learningRates<-c(0.01)
+#momentumStart<-c(0)
+#inputScaling<-c(T)
+#errorFunc<-c("Quadratic")
 ##Table to write results
-header1<-c("Error func","#layers","#hiddenUnits","learnRate","momentumStart","Scale","Acc_val","Acc_test","Time(min)")
+header1<-c("ErrorFunction","layers","hiddenUnits","learnRate","momentumStart","Scale","Acc_val","Acc_test","Time in min")
 resultsTab<-data.frame(matrix(ncol = 9, nrow = 0))
 colnames(resultsTab)<-header1
 #set seed for reproducible results
@@ -78,7 +78,7 @@ for(errF in errorFunc){
             
             #build model and calculate accuraccy
             s <- proc.time() #start time
-            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = "Rectifier",epochs = 100,loss=errF,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
+            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = "Rectifier",epochs = 200,loss=errF,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
             d <- proc.time()  - s #end time
             #print("Model training metrics")
             #model1@model$training_metrics
@@ -144,23 +144,26 @@ bestModel
 h2o.confusionMatrix(bestModel,test.h2o)
 ```
 
-### Experiment 1a. Plots of hyperparameters with respect to test accuraccy
+### Experiment 1a. Plots showing vaiability of test accuraccy of best model with respect to hyperparameters 
 
 ```{r,tidy=TRUE}
+#for plotting
+resultsTab$ErrorFunction<-factor(resultsTab$ErrorFunction, levels=errorFunc)
 par(mfrow=c(2,2))
-plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$`#hiddenUnits`,xlab="Hidden units",type="p",col="red",pch=16)
-plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$`#layers`,xlab="Hidden layers",type="p",col="red",pch=16)
-plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$learnRate,xlab="Rate",type="p",col="red",pch=16)
-plot(y=resultsTab$Acc_test,ylab = "Accuraccy",x=resultsTab$momentumStart,xlab="Mom. Start",type="p",col="red",pch=16)
+boxplot(as.numeric(resultsTab$Acc_test)~as.numeric(resultsTab$layers),data=resultsTab, main="Acc vs Layers", ylab="Accuraccy", xlab="Num layers")
+boxplot(as.numeric(resultsTab$Acc_test)~as.numeric(resultsTab$hiddenUnits),data=resultsTab, main="Acc vs Units", xlab="Hidden units", ylab="Accuraccy")
+boxplot(as.numeric(resultsTab$Acc_test)~as.numeric(resultsTab$ErrorFunction),data=resultsTab, main="Acc vs Error func", xlab="Error fun (1.SumofSq, 2.CrossEntropy)", ylab="Accuraccy")
+boxplot(as.numeric(resultsTab$Acc_test)~as.numeric(resultsTab$learnRate),data=resultsTab, main="Acc vs Rate", ylab="Accuraccy", xlab="Learning rate")
 par(mfrow=c(1,1))
 ```
 
 #Experiment 1b
 
-For Experiment 1 I chose the hidden layers to be ReLU and I changed other parameters. I iterated over combinations of following parameters and buit models and tested them.
+For Experiment 1b I chose the error function to be cross entropy and I changed other parameters. I iterated over combinations of following parameters and buit models and tested them.
 
 ## Parameters
-  * Error Function: Quadratic, CrossEntropy
+  * Error Function: CrossEntropy
+  * Activation Function: TanH, ReLU
   * Hidden Layers: 1, 2, 3
   * Hidden Units: 100, 200, 300
   * Learning Rate: 0.005, 0.01
@@ -170,6 +173,119 @@ For Experiment 1 I chose the hidden layers to be ReLU and I changed other parame
 I wrote the attached R code for simulation. The results are described in Table 1. 
 
 ## Experiment 1b R code
+
+
+```{r,tidy=TRUE}
+##ALL data is already loaded
+
+######Set model hyper-parameters
+hiddenLayers<-c(1,2,3)
+hiddenUnits<-c(100,200,300)
+learningRates<-c(0.005,0.01)
+momentumStart<-c(0,0.5)
+inputScaling<-c(T,F)
+errorFunc<-c("CrossEntropy")
+act<-c("Rectifier","Tanh")
+#hiddenLayers<-c(1)
+#hiddenUnits<-c(100,200)
+#learningRates<-c(0.01)
+#momentumStart<-c(0)
+#inputScaling<-c(T)
+#errorFunc<-c("Quadratic")
+##Table to write results
+header2<-c("activation","layers","hiddenUnits","learnRate","momentumStart","Scale","Acc_val","Acc_test","Time in min")
+resultsTab2<-data.frame(matrix(ncol = 9, nrow = 0))
+colnames(resultsTab2)<-header2
+#set seed for reproducible results
+set.seed(1654)
+#save the best model i.e. highest accuraccy on test set
+bestModelb<-NULL
+bestAcc<-0
+#make all comniations of the parameters
+for(a in act){
+  for(hL in hiddenLayers){
+    for(hU in hiddenUnits){
+      for(lR in learningRates){
+        for(mS in momentumStart){
+          for(iS in inputScaling){
+            
+            #build model and calculate accuraccy
+            s <- proc.time() #start time
+            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = a ,epochs = 200,loss=errorFunc,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
+            d <- proc.time()  - s #end time
+          
+            #test on testdata
+            cat("Performance on test data:")
+            perf<-h2o.performance(model1,test.h2o)
+            perf
+            #compute accuraccy on validation
+            valResult <- h2o.predict(model1, validation.h2o,y=y.dep)
+            predictions<-as.data.frame(valResult[,1])
+            trueLabels<-c.validation$V65
+            correct<-0
+            for(i in 1:dim(predictions)[1]){
+              if(as.numeric(predictions$predict[i])==as.numeric(c.validation$V65[i])){
+                correct<-correct+1
+              }
+            }
+            acc_V<-format(correct/dim(predictions)[1],digits = 4)
+            cat("Accuraccy on validation set:",acc_V)
+            #compute accuraccy on test
+            testResult <- h2o.predict(model1, test.h2o,y=y.dep)
+            predictions<-as.data.frame(testResult[,1])
+            trueLabels<-test$V65
+            correct<-0
+            for(i in 1:dim(predictions)[1]){
+              if(as.numeric(predictions$predict[i])==as.numeric(test$V65[i])){
+                correct<-correct+1
+              }
+            }
+            acc<-format(correct/dim(predictions)[1],digits = 4)
+            cat("Accuraccy on test set:",acc)
+            resultsTab2[nrow(resultsTab2)+1,] <- c(a,hL,hU,lR,mS,iS,acc_V,acc,format(as.numeric(d)[3]/60,digits = 2))
+            
+            if(acc>bestAcc){
+              bestModelb<-model1
+              bestAcc<acc
+            }
+          }
+        }
+      }
+    }
+  }
+}
+resultsTab2 %>% knitr::kable(caption = "Experiment 1b outcomes. Error function was cross-entropy.")
+
+```
+
+From Table 2 we can see that the model with highest accuraccy in experiment 1b had following parameters: `r resultsTab[which.max(resultsTab$Acc_test),]`.
+
+
+### Experiment 1b. Best model confusion matrix and model summary
+```{r,tidy=TRUE}
+bestModelb
+```
+
+### Experiment 1b. Best model confusion matrix on test set
+
+```{r,tidy=TRUE}
+h2o.confusionMatrix(bestModelb,test.h2o)
+```
+
+### Experiment 1b. Plots showing vaiability of test accuraccy of best model with respect to hyperparameters 
+
+```{r,tidy=TRUE}
+#for plotting
+resultsTab2$activation<-factor(resultsTab2$activation, levels=act)
+par(mfrow=c(2,2))
+boxplot(as.numeric(resultsTab2$Acc_test)~as.numeric(resultsTab2$layers),data=resultsTab2, main="Acc vs Layers", ylab="Accuraccy", xlab="Num layers")
+boxplot(as.numeric(resultsTab2$Acc_test)~as.numeric(resultsTab2$hiddenUnits),data=resultsTab2, main="Acc vs Units", xlab="Hidden units", ylab="Accuraccy")
+boxplot(as.numeric(resultsTab2$Acc_test)~as.numeric(resultsTab2$activation),data=resultsTab2, main="Acc vs Activation", xlab="Activation fun (1.ReLU, 2.tanh)", ylab="Accuraccy")
+boxplot(as.numeric(resultsTab2$Acc_test)~as.numeric(resultsTab2$learnRate),data=resultsTab2, main="Acc vs Rate", ylab="Accuraccy", xlab="Learning rate")
+par(mfrow=c(1,1))
+```
+
+
 
 
 ```{r,tidy=TRUE}
