@@ -1,5 +1,5 @@
 ---
-title: "Lab 2"
+title: "CS573 Lab 2"
 author: "Urminder Singh"
 date: "March 2, 2018"
 output: pdf_document
@@ -25,7 +25,7 @@ For Experiment 1 I chose the hidden layers to be ReLU and I changed other parame
   * Momentum Start: 0, 0.5
   * Input Scaling: True, False
 
-I wrote the attached R code for simulation. The results are described in Table 1. 
+I wrote the attached R code for simulation (using h2o). The results are described in Table 1. 
 
 ## Experiment 1a R code
 
@@ -36,6 +36,7 @@ library(data.table)
 train <- fread("optdigits.tra",stringsAsFactors = T,colClasses = c(rep('numeric',64),'character'))
 test<-fread("optdigits.tes",stringsAsFactors = T,colClasses = c(rep('numeric',64),'character'))
 h2o.init(nthreads=-1, enable_assertions = FALSE)
+h2o.no_progress()
 #Divide into train and test/validation
 c.train <- train[1:(nrow(train)*.8),]
 c.validation  <- train[(nrow(train)*.2):nrow(train),]
@@ -78,7 +79,7 @@ for(errF in errorFunc){
             
             #build model and calculate accuraccy
             s <- proc.time() #start time
-            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = "Rectifier",epochs = 200,loss=errF,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
+            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = "Rectifier",epochs = 150,loss=errF,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
             d <- proc.time()  - s #end time
             #print("Model training metrics")
             #model1@model$training_metrics
@@ -87,9 +88,9 @@ for(errF in errorFunc){
             #model1@model$training_metrics@metrics$model_category
             #h2o.confusionMatrix(model1)
             #test on testdata
-            cat("Performance on test data:")
-            perf<-h2o.performance(model1,test.h2o)
-            perf
+            #cat("Performance on test data:")
+            #perf<-h2o.performance(model1,test.h2o)
+            #perf
             #compute accuraccy on validation
             valResult <- h2o.predict(model1, validation.h2o,y=y.dep)
             predictions<-as.data.frame(valResult[,1])
@@ -101,7 +102,7 @@ for(errF in errorFunc){
               }
             }
             acc_V<-format(correct/dim(predictions)[1],digits = 4)
-            cat("Accuraccy on validation set:",acc_V)
+            #cat("Accuraccy on validation set:",acc_V)
             #compute accuraccy on test
             testResult <- h2o.predict(model1, test.h2o,y=y.dep)
             predictions<-as.data.frame(testResult[,1])
@@ -116,9 +117,9 @@ for(errF in errorFunc){
             cat("Accuraccy on test set:",acc)
             resultsTab[nrow(resultsTab)+1,] <- c(errF,hL,hU,lR,mS,iS,acc_V,acc,format(as.numeric(d)[3]/60,digits = 2))
             
-            if(acc>bestAcc){
+            if(acc > bestAcc){
               bestModel<-model1
-              bestAcc<acc
+              bestAcc<-acc
             }
           }
         }
@@ -146,7 +147,7 @@ h2o.confusionMatrix(bestModel,test.h2o)
 
 ### Experiment 1a. Plots showing vaiability of test accuraccy of best model with respect to hyperparameters 
 
-```{r,tidy=TRUE}
+```{r,tidy=TRUE,fig.cap=paste("Experiment 1a. Plots showing vaiability of test accuraccy of best model with respect to hyperparameters ")}
 #for plotting
 resultsTab$ErrorFunction<-factor(resultsTab$ErrorFunction, levels=errorFunc)
 par(mfrow=c(2,2))
@@ -170,7 +171,7 @@ For Experiment 1b I chose the error function to be cross entropy and I changed o
   * Momentum Start: 0, 0.5
   * Input Scaling: True, False
 
-I wrote the attached R code for simulation. The results are described in Table 1. 
+I wrote the attached R code for simulation (using h2o). The results are described in Table 2. 
 
 ## Experiment 1b R code
 
@@ -211,13 +212,13 @@ for(a in act){
             
             #build model and calculate accuraccy
             s <- proc.time() #start time
-            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = a ,epochs = 200,loss=errorFunc,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
+            model1<- h2o.deeplearning(x=predictors,y = y.dep,training_frame = train.h2o, validation_frame=validation.h2o,hidden = c(rep(hU),hL), activation = a ,epochs = 150,loss=errorFunc,rate=lR,momentum_start = mS,standardize = iS,adaptive_rate=F)
             d <- proc.time()  - s #end time
           
             #test on testdata
-            cat("Performance on test data:")
-            perf<-h2o.performance(model1,test.h2o)
-            perf
+            #cat("Performance on test data:")
+            #perf<-h2o.performance(model1,test.h2o)
+            #perf
             #compute accuraccy on validation
             valResult <- h2o.predict(model1, validation.h2o,y=y.dep)
             predictions<-as.data.frame(valResult[,1])
@@ -229,7 +230,7 @@ for(a in act){
               }
             }
             acc_V<-format(correct/dim(predictions)[1],digits = 4)
-            cat("Accuraccy on validation set:",acc_V)
+            #cat("Accuraccy on validation set:",acc_V)
             #compute accuraccy on test
             testResult <- h2o.predict(model1, test.h2o,y=y.dep)
             predictions<-as.data.frame(testResult[,1])
@@ -241,12 +242,12 @@ for(a in act){
               }
             }
             acc<-format(correct/dim(predictions)[1],digits = 4)
-            cat("Accuraccy on test set:",acc)
+            #cat("Accuraccy on test set:",acc)
             resultsTab2[nrow(resultsTab2)+1,] <- c(a,hL,hU,lR,mS,iS,acc_V,acc,format(as.numeric(d)[3]/60,digits = 2))
             
-            if(acc>bestAcc){
+            if(acc > bestAcc){
               bestModelb<-model1
-              bestAcc<acc
+              bestAcc<-acc
             }
           }
         }
@@ -258,7 +259,7 @@ resultsTab2 %>% knitr::kable(caption = "Experiment 1b outcomes. Error function w
 
 ```
 
-From Table 2 we can see that the model with highest accuraccy in experiment 1b had following parameters: `r resultsTab[which.max(resultsTab$Acc_test),]`.
+From Table 2 we can see that the model with highest accuraccy in experiment 1b had following parameters: `r resultsTab2[which.max(resultsTab2$Acc_test),]`.
 
 
 ### Experiment 1b. Best model confusion matrix and model summary
@@ -274,7 +275,7 @@ h2o.confusionMatrix(bestModelb,test.h2o)
 
 ### Experiment 1b. Plots showing vaiability of test accuraccy of best model with respect to hyperparameters 
 
-```{r,tidy=TRUE}
+```{r,tidy=TRUE, fig.cap=paste("Experiment 1b. Plots showing vaiability of test accuraccy of best model with respect to hyperparameters")}
 #for plotting
 resultsTab2$activation<-factor(resultsTab2$activation, levels=act)
 par(mfrow=c(2,2))
@@ -292,3 +293,228 @@ par(mfrow=c(1,1))
 #shutdown h2o
 h2o.shutdown(prompt=FALSE)
 ```
+
+# Experiment 1: Discussion
+
+## Experiment 1a
+
+In Experiment 1a I fixed the activation function for hidden layers to be ReLU and I built models by iterating over hyperparameter space which I generated arbitarily. I found that the best model has following parameters:
+  * Error function: CrossEntropy
+  * Hidden layers: 3
+  * Hidden units: 200
+  * learning rate: 0.005
+  * momentum start: 0.5
+  * Input Scaling: TRUE
+  * Accuracy (validation): 0.9863
+  * Accuraccy (test): 0.9432
+I expected the model to have maximum number of hidden units and layers but this is not the result I found. Infact the model with 3 hidden layers with 300 units and other hyperparameters same as the best model gave an accuraccy of only 45% on the test set.
+
+In Fig 1 we can see how the hyperparameters i.e. hidden layers, hidden units, error function and learning rate contributes to accuraccy. These plots show overall variability of test set accuraccy over these hyperparameters. We see that hidden layers 2 and 3 have can cause higher variability in accuraccy. When hidden units are lesser variation is high although the range of accuraccy over different number of units looks same. Clearly, the median values of accuracy over cross-entropy and sum of squares looks same but cross entropy has higher max value. With learning rate lower i.e. 0.005 we see that accuracy has higher maximum value as compared to learning rate 0.01.
+
+
+## Experiment 1b
+
+In Experiment 1b I fixed the error function to be cross entropy and I built models by iterating over the hyperparameter space which I generated arbitarily. I found that the best model has following parameters:
+  * Error function: CrossEntropy
+  * Activation: 
+  * Hidden layers: 3
+  * Hidden units: 200
+  * learning rate: 0.005
+  * momentum start: 0.5
+  * Input Scaling: TRUE
+  * Accuracy (validation): 0.9863
+  * Accuraccy (test): 0.9432
+
+
+
+In Fig 2 we can see how the hyperparameters i.e. hidden layers, hidden units, activation function and learning rate contributes to accuraccy. Just as in Fig1, these plots show overall variability of test set accuraccy over these hyperparameters. We see that,similar to Fig1, hidden layers 2 and 3 have can cause higher variability in accuraccy, with the median value for 3 layers to be much higher. Variation of accuracy accross different hidden units also look similar to Fig1. When hidden units are lesser variation is high although the range of accuraccy over different number of units looks same. When activation function is tanh the variation is high with median value higher than ReLU.
+As in experiment 1a. with learning rate lower i.e. 0.005 we see that accuracy has higher maximum value as compared to learning rate 0.01.
+
+
+The above experiments reveals that while training neural networks one must be very careful while setting the hyperparameters. It is a good practice to iterate over a space of hyperparameters and choose the best as choice of best parameters may not always be intuitive. 
+
+# Experiment 2
+
+For experiment 2 I implemented convolutional networks with 2 convolutional layers. I set the error function to be cross entropy and the activation function was ReLU. Then, I trained models with different hyperparameters and found the best model i.e. model with highest accuraccy on test set. I iterated over the following hyperparameters:
+  * Hidden units in layer1
+  * Kernel size
+  * Number of filters
+  * Learning rate
+  
+To train convolutional network first I converted the given data into 3D data of 8x8x1 ,where 8x8 was the image size 1 is the filter i.e. grayscale. I wrote the attached R code for simulation of convolutional nets (using mxnet). The results are described in Table 3. 
+
+
+## Experiment 2 R Code
+```{r,tidy=TRUE}
+# Load MXNet
+require(mxnet)
+#set train and test data
+train_cn <- data.matrix(train)
+train_x <- t(train_cn[,1:64])
+train_y <- train_cn[,65]
+train_array <- train_x
+
+test_cn<- data.matrix(test)
+test_x <- t(test_cn[,1:64])
+test_y <- test[,65]
+test_array <- test_x
+##missed steps
+#resize to 8x8 image
+dim(train_array) <- c(8, 8, 1, ncol(train_x))
+dim(test_array) <- c(8, 8, 1, ncol(test_x))
+
+data <- mx.symbol.Variable('data')
+
+#define hyperparameter space
+K<-c(1,2)
+numF<-c(20,40)
+hid1<-c(100,200,500)
+hid2<-c(10,50,100)
+learnRate<-c(0.005,0.01)
+##test
+#K<-c(2)
+#numF<-c(20)
+#hid1<-c(500)
+#hid2<-c(40)
+#learnRate<-c(0.1)
+
+#create table for results
+##Table to write results
+header3<-c("Num.Convlayers","Units in conv1","Units in conv2","kernel","NumFilter","Rate","Acc_train","Acc_test","Time in min")
+resultsTab3<-data.frame(matrix(ncol = 9, nrow = 0))
+colnames(resultsTab3)<-header3
+
+bestModelc<-NULL
+bestAcc<-0
+#error func cross entropy, hidden activation ReLU
+for (h1 in hid1) {
+  for (h2 in hid2) {
+    for (ks in K) {
+      for (f in numF) {
+        for (r in learnRate) {
+          cat(h1,h2,ks,f,r)
+          s <- proc.time() #start time
+          # 1st convolutional layer
+          conv_1 <-
+            mx.symbol.Convolution(
+              data = data,
+              kernel = c(ks,ks),
+              num_filter = f
+            )
+          relu_1 <-
+            mx.symbol.Activation(data = conv_1, act_type = "relu")
+          pool_1 <-
+            mx.symbol.Pooling(
+              data = relu_1,
+              pool_type = "max",
+              kernel = c(ks,ks)
+            )
+          # 2nd convolutional layer
+          conv_2 <-
+            mx.symbol.Convolution(
+              data = pool_1,
+              kernel = c(ks,ks),
+              num_filter = f
+            )
+          relu_2 <-
+            mx.symbol.Activation(data = conv_2, act_type = "relu")
+          pool_2 <-
+            mx.symbol.Pooling(
+              data = relu_2,
+              pool_type = "max",
+              kernel = c(ks,ks)
+            )
+          # 1st fully connected layer
+          flat <- mx.symbol.Flatten(data = pool_2)
+          fcl_1 <-
+            mx.symbol.FullyConnected(data = flat, num_hidden = h1)
+          relu_3 <-
+            mx.symbol.Activation(data = fcl_1, act_type = "relu")
+          # 2nd fully connected layer
+          fcl_2 <-
+            mx.symbol.FullyConnected(data = relu_3, num_hidden = h2)
+          # Output
+          NN_model <-
+            mx.symbol.SoftmaxOutput(data = fcl_2, name = 'softmax')
+          # Set seed for reproducibility
+          mx.set.seed(100)
+          #use CPU
+          device <- mx.cpu()
+          # Train whole training data
+          model <- mx.model.FeedForward.create(
+            NN_model,
+            X = train_array,
+            y = train_y,
+            ctx = device,
+            num.round = 200,
+            array.batch.size = 100,
+            learning.rate = r,
+            eval.metric = mx.metric.accuracy,
+            epoch.end.callback = mx.callback.log.train.metric(100),
+            verbose = F
+          )
+          d <- proc.time()  - s #end time
+          #accuraccy on train set
+          predict_probs <- predict(model, train_array)
+          predicted_labels <- max.col(t(predict_probs)) - 1
+          correct <- 0
+          for (i in 1:length(predicted_labels)) {
+            if (as.numeric(predicted_labels[i]) == as.numeric(train$V65[i])) {
+              correct <- correct + 1
+            }
+          }
+          acc_tr <- format(correct / length(predicted_labels), digits = 4)
+          #cat("ConvNet Accuraccy on train set:", acc)
+          #accuraccy on test set
+          predict_probs <- predict(model, test_array)
+          predicted_labels <- max.col(t(predict_probs)) - 1
+          correct <- 0
+          for (i in 1:length(predicted_labels)) {
+            if (as.numeric(predicted_labels[i]) == as.numeric(test$V65[i])) {
+              correct <- correct + 1
+            }
+          }
+          acc <- format(correct / length(predicted_labels), digits = 4)
+          #cat("ConvNet Accuraccy on test set:", acc)
+          
+          #add to table
+          resultsTab3[nrow(resultsTab3)+1,] <- c(2,h1,h2,paste("(",ks,",",ks,")",sep=""),f,r,acc_tr,acc,format(as.numeric(d)[3]/60,digits = 2))
+          
+          #choose best model
+          if(acc>bestAcc){
+            bestModelc<-model
+            bestAcc<-acc
+          }
+          
+        }
+      }
+    }
+  }
+}
+
+confusion_matrix <- table(predicted_labels, t(test_y))
+
+resultsTab3 %>% knitr::kable(caption = "Experiment 2 outcomes. Error function was cross-entropy and hidden units were ReLU.")
+```
+
+From Table 3 we can see that the convolutional net model with highest accuraccy in experiment 2 had following parameters: `r resultsTab3[which.max(resultsTab3$Acc_test),]`.
+
+
+### Experiment 2: Best model confusion matrix and model summary
+```{r,tidy=TRUE}
+bestModelc
+```
+
+### Experiment 2: Best model confusion matrix on test set
+
+```{r,tidy=TRUE}
+confusion_matrix
+```
+
+# Experiment 2: Discussion
+
+I found the best convolutional model had the following hyperparameters:
+  * Hidden units in layer1
+  * Kernel size
+  * Number of filters
+  * Learning rate
