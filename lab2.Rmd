@@ -299,15 +299,17 @@ h2o.shutdown(prompt=FALSE)
 ## Experiment 1a
 
 In Experiment 1a I fixed the activation function for hidden layers to be ReLU and I built models by iterating over hyperparameter space which I generated arbitarily. I found that the best model has following parameters:
-  * Error function: CrossEntropy
-  * Hidden layers: 3
-  * Hidden units: 200
-  * learning rate: 0.005
-  * momentum start: 0.5
-  * Input Scaling: TRUE
-  * Accuracy (validation): 0.9863
-  * Accuraccy (test): 0.9432
-I expected the model to have maximum number of hidden units and layers but this is not the result I found. Infact the model with 3 hidden layers with 300 units and other hyperparameters same as the best model gave an accuraccy of only 45% on the test set.
+
+  * Error function: `r resultsTab[which.max(resultsTab2$Acc_test),]$ErrorFunction`
+  * Hidden layers: `r resultsTab[which.max(resultsTab2$Acc_test),]$layers`
+  * Hidden units: `r resultsTab[which.max(resultsTab2$Acc_test),]$hiddenUnits`
+  * learning rate: `r resultsTab[which.max(resultsTab2$Acc_test),]$learnRate`
+  * momentum start: `r resultsTab[which.max(resultsTab2$Acc_test),]$momentumStart`
+  * Input Scaling: `r resultsTab[which.max(resultsTab2$Acc_test),]$Scale`
+  * Accuracy (validation): `r resultsTab[which.max(resultsTab2$Acc_test),]$Acc_val`
+  * Accuraccy (test): `r resultsTab[which.max(resultsTab2$Acc_test),]$Acc_test`
+  
+I expected the model to have maximum number of hidden units and layers but this is not always the result I found. Infact the model with 3 hidden layers with 300 units and other hyperparameters same as the best model gave an accuraccy of only 45% on the test set.
 
 In Fig 1 we can see how the hyperparameters i.e. hidden layers, hidden units, error function and learning rate contributes to accuraccy. These plots show overall variability of test set accuraccy over these hyperparameters. We see that hidden layers 2 and 3 have can cause higher variability in accuraccy. When hidden units are lesser variation is high although the range of accuraccy over different number of units looks same. Clearly, the median values of accuracy over cross-entropy and sum of squares looks same but cross entropy has higher max value. With learning rate lower i.e. 0.005 we see that accuracy has higher maximum value as compared to learning rate 0.01.
 
@@ -316,15 +318,14 @@ In Fig 1 we can see how the hyperparameters i.e. hidden layers, hidden units, er
 
 In Experiment 1b I fixed the error function to be cross entropy and I built models by iterating over the hyperparameter space which I generated arbitarily. I found that the best model has following parameters:
   * Error function: CrossEntropy
-  * Activation: 
-  * Hidden layers: 3
-  * Hidden units: 200
-  * learning rate: 0.005
-  * momentum start: 0.5
-  * Input Scaling: TRUE
-  * Accuracy (validation): 0.9863
-  * Accuraccy (test): 0.9432
-
+  * Error function: `r resultsTab2[which.max(resultsTab2$Acc_test),]$activation`
+  * Hidden layers: `r resultsTab2[which.max(resultsTab2$Acc_test),]$layers`
+  * Hidden units: `r resultsTab2[which.max(resultsTab2$Acc_test),]$hiddenUnits`
+  * learning rate: `r resultsTab2[which.max(resultsTab2$Acc_test),]$learnRate`
+  * momentum start: `r resultsTab2[which.max(resultsTab2$Acc_test),]$momentumStart`
+  * Input Scaling: `r resultsTab2[which.max(resultsTab2$Acc_test),]$Scale`
+  * Accuracy (validation): `r resultsTab2[which.max(resultsTab2$Acc_test),]$Acc_val`
+  * Accuraccy (test): `r resultsTab2[which.max(resultsTab2$Acc_test),]$Acc_test`
 
 
 In Fig 2 we can see how the hyperparameters i.e. hidden layers, hidden units, activation function and learning rate contributes to accuraccy. Just as in Fig1, these plots show overall variability of test set accuraccy over these hyperparameters. We see that,similar to Fig1, hidden layers 2 and 3 have can cause higher variability in accuraccy, with the median value for 3 layers to be much higher. Variation of accuracy accross different hidden units also look similar to Fig1. When hidden units are lesser variation is high although the range of accuraccy over different number of units looks same. When activation function is tanh the variation is high with median value higher than ReLU.
@@ -337,6 +338,7 @@ The above experiments reveals that while training neural networks one must be ve
 
 For experiment 2 I implemented convolutional networks with 2 convolutional layers. I set the error function to be cross entropy and the activation function was ReLU. Then, I trained models with different hyperparameters and found the best model i.e. model with highest accuraccy on test set. I iterated over the following hyperparameters:
   * Hidden units in layer1
+  *  Hidden units in layer2
   * Kernel size
   * Number of filters
   * Learning rate
@@ -346,8 +348,15 @@ To train convolutional network first I converted the given data into 3D data of 
 
 ## Experiment 2 R Code
 ```{r,tidy=TRUE}
+# clear workspace
+rm(list=ls())
 # Load MXNet
 require(mxnet)
+library("magrittr", lib.loc="~/R/x86_64-pc-linux-gnu-library/3.4")
+library(data.table)
+#load data files
+train <- fread("optdigits.tra",stringsAsFactors = T,colClasses = c(rep('numeric',64),'character'))
+test<-fread("optdigits.tes",stringsAsFactors = T,colClasses = c(rep('numeric',64),'character'))
 #set train and test data
 train_cn <- data.matrix(train)
 train_x <- t(train_cn[,1:64])
@@ -366,11 +375,11 @@ dim(test_array) <- c(8, 8, 1, ncol(test_x))
 data <- mx.symbol.Variable('data')
 
 #define hyperparameter space
-K<-c(1,2)
+K<-c(2)
 numF<-c(20,40)
-hid1<-c(100,200,500)
-hid2<-c(10,50,100)
-learnRate<-c(0.005,0.01)
+hid1<-c(200,500)
+hid2<-c(10,40)
+learnRate<-c(0.005,0.1)
 ##test
 #K<-c(2)
 #numF<-c(20)
@@ -446,7 +455,7 @@ for (h1 in hid1) {
             X = train_array,
             y = train_y,
             ctx = device,
-            num.round = 200,
+            num.round = 10,
             array.batch.size = 100,
             learning.rate = r,
             eval.metric = mx.metric.accuracy,
@@ -499,12 +508,6 @@ resultsTab3 %>% knitr::kable(caption = "Experiment 2 outcomes. Error function wa
 
 From Table 3 we can see that the convolutional net model with highest accuraccy in experiment 2 had following parameters: `r resultsTab3[which.max(resultsTab3$Acc_test),]`.
 
-
-### Experiment 2: Best model confusion matrix and model summary
-```{r,tidy=TRUE}
-bestModelc
-```
-
 ### Experiment 2: Best model confusion matrix on test set
 
 ```{r,tidy=TRUE}
@@ -513,8 +516,14 @@ confusion_matrix
 
 # Experiment 2: Discussion
 
-I found the best convolutional model had the following hyperparameters:
-  * Hidden units in layer1
-  * Kernel size
-  * Number of filters
-  * Learning rate
+Convolutional networks take much more time to build and given sufficient iteration time I saw convolutional networks can achevie 100% accuraccy on training data and still perform better on the test set. Overall, I found that training convolutional networks one must be careful to set the hyperparameters. If parameters are set icorrectly the convolutional network may not learn true model and will give poor results. E.g. when hidden units in second layers is less than 50 the accuraccy is only 10%.
+On the other hand if parameters are set to learn and iterate over data slowly, the convolutional network will take a lot of time to converge. E.g. set the learn rate 0.005 with 500 hidden units in each layer, and num.iterations = 500 the model will acheive accuraccy 100% on training set but will take a lot of time to build.
+
+Compared to feedforward networks, convolutional networks are much better for image/pattern recognition.
+
+# Appendix A
+
+## System information
+```{r,tidy=TRUE}
+sessionInfo()
+```
