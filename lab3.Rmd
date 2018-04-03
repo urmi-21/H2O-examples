@@ -11,3 +11,540 @@ knitr::opts_chunk$set(echo = TRUE,message = FALSE,warning = FALSE)
 
 # Data
 Data was downloaded from https://archive.ics.uci.edu/ml/datasets/Blood+Transfusion+Service+Center. Data coressponds 748 blood donors. There are four variables R (Recency - months since last donation), F (Frequency - total number of donation), M (Monetary - total blood donated in c.c.), T (Time - months since first donation), and a binary variable representing whether he/she donated blood in March 2007 (1 stand for donating blood; 0 stands for not donating blood).
+
+# Solution 1
+I have implemented RandomForest and AdaBoost.M1 using caret library in R. 
+
+## Random Forest
+The code I implemented for RandomForest is attached below.
+
+```{r,tidy=TRUE}
+#load libraries
+library(caret)
+library(readr)
+library("caretEnsemble")
+library("magrittr", lib.loc="~/R/win-library/3.4")
+#read test and train data
+#lab3_train <- read_csv("lab3-train.csv", col_types = cols(Class = col_factor(levels = c("0","1"))))
+lab3_train <- read_csv("lab3-train.csv")
+lab3_test <- read_csv("lab3-test.csv", col_types = cols(Class = col_factor(levels = c("0",  "1"))))
+
+#Read the input files
+lab3_train = read.csv("lab3-train.csv")
+lab3_test = read.csv("lab3-test.csv")
+#change labels
+lab3_train$Class = ifelse(lab3_train$Class==1, 'Yes', 'No')
+lab3_test$Class = ifelse(lab3_test$Class==1, 'Yes', 'No')
+#x, y has training data
+x <- lab3_train[,1:4]
+y = lab3_train[,5]
+
+###Train RF model
+
+#define hyperparams
+ntree<-c(1,50,100,1000)
+preproc<-c("center", "scale","knnImpute")
+tunelen<-c(1,2,3,5)
+trcontrol = trainControl(method='cv', number=5, summaryFunction = twoClassSummary, classProbs = TRUE)
+#table to store results
+header1<-c("ntree","preProc","tuneLength","mtry","ROC","Acc_test","Time in min")
+rf_resultsTab<-data.frame(matrix(ncol = 7, nrow = 0))
+colnames(rf_resultsTab)<-header1
+best_rf_model<-NULL
+best_rf_acc<-0
+for (nt in ntree){
+  for(pp in preproc){
+    #print (pp)
+    for(tl in tunelen){
+      s <- proc.time() #start time
+      rf_model= train(x, as.factor(y), method='rf', trControl = trcontrol, metric = "Accuracy", tuneLength=tl, preProc = pp,ntree=nt)
+      d <- proc.time()  - s #end time
+      #calculate test accuraccy
+      pred_res<-predict(rf_model, lab3_test)
+      correct<-0
+      for (i in (1:length(pred_res))){
+        if(pred_res[i]==lab3_test$Class[i]){
+          correct=correct+1
+        }
+      }
+      test_acc <- (correct)/length(pred_res)
+      
+      if(test_acc>best_rf_acc){
+        best_rf_acc=test_acc
+        best_rf_model<-rf_model
+      }
+      
+      rf_resultsTab[nrow(rf_resultsTab)+1,] <- c(nt,pp,tl,rf_model$finalModel$mtry,max(rf_model$results$ROC),test_acc,format(as.numeric(d)[3]/60,digits = 2))
+      
+    }
+  }
+}
+rf_resultsTab %>% knitr::kable(caption = "Training RF with different hyperparameters")
+
+```
+
+From Table 1 we can see that the random forest model with highest accuraccy on the test had following parameters: `r rf_resultsTab[which.max(rf_resultsTab$Acc_test),]`. The maximum accuraccy acheived by RandomForest model on the test set is `r best_rf_acc`
+
+## Best RandomForest Model performance
+
+```{r,tidy=TRUE}
+best_rf_model
+pred_res<-predict(best_rf_model, lab3_test)
+confusionMatrix(pred_res,lab3_test[,5])
+```
+
+## AdaBoost.M1
+The code I implemented for AdaBoost.M1 is attached below.
+
+```{r,tidy=TRUE}
+###Train AdaBoost.M1 model
+#define ada hyperparams
+clearn=c("Breiman","Freund", "Zhu")
+mdepth=c(2,5)
+mfinal=c(4,10)
+preproc<-c("center", "scale","knnImpute")
+#table to store results
+header2<-c("coeflearn","preProc","maxdepth","mfinal","ROC","Acc_test","Time in min")
+ada_resultsTab<-data.frame(matrix(ncol = 7, nrow = 0))
+colnames(ada_resultsTab)<-header2
+best_ada_model<-NULL
+best_ada_acc<-0
+for(cl in clearn){
+  for(md in mdepth){
+    for(mf in mfinal){
+      for(pp in preproc){
+        control = trainControl(method='cv', number=2, summaryFunction = twoClassSummary, classProbs = TRUE)
+        grid = expand.grid(mfinal = mf, maxdepth = md, coeflearn = cl)
+        s <- proc.time() #start time
+        ada_model = train(x, as.factor(y), method = "AdaBoost.M1", trControl = control, tuneGrid = grid, metric = "ROC", preProc = pp)  
+        d <- proc.time()  - s #end time
+        #calculate test accuraccy
+        pred_res<-predict(ada_model, lab3_test)
+        correct<-0
+        for (i in (1:length(pred_res))){
+          if(pred_res[i]==lab3_test$Class[i]){
+            correct=correct+1
+          }
+        }
+        test_acc <- (correct)/length(pred_res)
+        if(test_acc>best_ada_acc){
+          best_ada_acc=test_acc
+          best_ada_model<-ada_model
+        }
+        
+        ada_resultsTab[nrow(ada_resultsTab)+1,] <- c(cl,pp,md,mf,max(ada_model$results$ROC),test_acc,format(as.numeric(d)[3]/60,digits = 2))
+        
+      }
+      
+    }
+  }
+}
+
+ada_resultsTab %>% knitr::kable(caption = "Training AdaBoost.M1 with different hyperparameters")
+```
+
+From Table 2 we can see that the AdaBoost.M1 model with highest accuraccy on the test had following parameters: `r ada_resultsTab[which.max(ada_resultsTab$Acc_test),]`. The maximum accuraccy acheived by AdaBoost.M1 model on the test set is `r best_ada_acc`
+
+## Best AdaBoost.M1 Model performance
+
+```{r,tidy=TRUE}
+best_ada_model
+pred_res<-predict(best_ada_model, lab3_test)
+confusionMatrix(pred_res,lab3_test[,5])
+```
+
+
+# Solution 2
+I trained individual Neural Network (NN), KNN, Logistic Regression (LR), Naive Bayes (NB), and Decision Tree (DT). The code i implemented is below.
+
+## Neural Network
+
+```{r,tidy=TRUE}
+header3<-c("Model","Acc_test","Time in min")
+ind_resultsTab<-data.frame(matrix(ncol = 3, nrow = 0))
+colnames(ind_resultsTab)<-header3
+#train neural net
+nn_test_acc<-0
+grid <- expand.grid(.decay = c(0.5, 0.1), .size = c(4, 4, 2))
+control = trainControl(method='cv', number=2, summaryFunction = twoClassSummary, classProbs = TRUE)
+s <- proc.time() #start time
+nnet_model = train(Class~.,data=lab3_train,  method="nnet", trControl=control, metric="ROC", tuneLength=3, preProc=c("center"))
+d <- proc.time() -s #end time
+print(nnet_model)
+print(nnet_model$finalModel)
+nn_pred_res<-predict(nnet_model, lab3_test)
+correct<-0
+for (i in (1:length(nn_pred_res))){
+  if(nn_pred_res[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+nn_test_acc <- (correct)/length(nn_pred_res)
+
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Neural Network",nn_test_acc,format(as.numeric(d)[3]/60,digits = 2))
+```
+
+Using Neural Network I got accuraccy `r nn_test_acc`
+
+### Neural Network Model
+```{r,tidy=TRUE}
+print(nnet_model)
+confusionMatrix(nn_pred_res,lab3_test[,5])
+```
+
+## KNN
+```{r,tidy=TRUE}
+knn_test_acc<-0
+control = trainControl(method='cv', number=2, summaryFunction = twoClassSummary, classProbs = TRUE)
+s=proc.time()
+knn_model = train(x, as.factor(y), method='knn', trControl=control, metric="ROC", tuneLength=3, preProc=c("center"))
+d=proc.time()-s
+knn_pred_res<-predict(knn_model, lab3_test)
+correct<-0
+for (i in (1:length(knn_pred_res))){
+  if(knn_pred_res[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+knn_test_acc <- (correct)/length(knn_pred_res)
+
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("KNN",knn_test_acc,format(as.numeric(d)[3]/60,digits = 2))
+
+
+```
+
+Using KNN I got accuraccy `r knn_test_acc`
+
+### KNN Model
+```{r,tidy=TRUE}
+print(knn_model)
+confusionMatrix(knn_pred_res,lab3_test[,5])
+```
+
+## Logistic Regression
+```{r,tidy=TRUE}
+lr_test_acc<-0
+s=proc.time()
+lr_model = train(x, as.factor(y), method='glm', trControl=control, metric="ROC", tuneLength=3, preProc=c("center"))
+d=proc.time()-s
+print(lr_model)
+lr_pred_res<-predict(lr_model, lab3_test)
+correct<-0
+for (i in (1:length(lr_pred_res))){
+  if(lr_pred_res[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+lr_test_acc <- (correct)/length(lr_pred_res)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("LogisticRegression",lr_test_acc,format(as.numeric(d)[3]/60,digits = 2))
+
+
+```
+
+Using Logistic Regression I got accuraccy `r lr_test_acc`
+
+### Logistic Regression Model
+```{r,tidy=TRUE}
+print(lr_model)
+confusionMatrix(lr_pred_res,lab3_test[,5])
+```
+
+
+## Naive Bayes
+```{r,tidy=TRUE}
+nb_test_acc<-0
+s=proc.time()
+nb_model = train(Class~.,data=lab3_train,  method="nb", trControl=control, metric="ROC", tuneLength=3, preProc=c("center"))
+d=proc.time()-s
+nb_pred_res<-predict(nb_model, lab3_test)
+correct<-0
+for (i in (1:length(nb_pred_res))){
+  if(nb_pred_res[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+nb_test_acc <- (correct)/length(nb_pred_res)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Naive Bayes",nb_test_acc,format(as.numeric(d)[3]/60,digits = 2))
+
+
+```
+
+Using Naive Bayes I got accuraccy `r nb_test_acc`
+
+### Naive Bayes Model
+```{r,tidy=TRUE}
+print(nb_model)
+confusionMatrix(nb_pred_res,lab3_test[,5])
+```
+
+## Decision Tree
+```{r,tidy=TRUE}
+dt_test_acc<-0
+s=proc.time()
+dt_model = train(Class~.,data=lab3_train,  method="rpart", trControl=control, metric="ROC", tuneLength=3, preProc=c("center"))
+d=proc.time()-s
+dt_pred_res<-predict(dt_model, lab3_test)
+correct<-0
+for (i in (1:length(dt_pred_res))){
+  if(dt_pred_res[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+dt_test_acc <- (correct)/length(dt_pred_res)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Decision Tree",dt_test_acc,format(as.numeric(d)[3]/60,digits = 2))
+ind_resultsTab %>% knitr::kable(caption = "Training individual classifiers")
+
+#add rf and ada
+rf_preds <- predict(best_rf_model, lab3_test)
+rf_test_acc<-0
+correct<-0
+for (i in (1:length(rf_preds))){
+  if(rf_preds[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+rf_test_acc <- (correct)/length(rf_preds)
+
+ada_preds <- predict(best_ada_model, lab3_test)
+ada_test_acc<-0
+correct<-0
+for (i in (1:length(ada_preds))){
+  if(ada_preds[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+ada_test_acc <- (correct)/length(ada_preds)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Best RF",rf_test_acc,rf_resultsTab[which.max(rf_resultsTab$Acc_test),]$`Time in min`)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Best ADA",ada_test_acc,ada_resultsTab[which.max(ada_resultsTab$Acc_test),]$`Time in min`)
+```
+
+Using Decision Tree I got accuraccy `r dt_test_acc`
+
+### Decision Tree Model
+```{r,tidy=TRUE}
+print(dt_model)
+confusionMatrix(dt_pred_res,lab3_test[,5])
+```
+
+## Best Individual Model
+The model with highest accuraccy on test set is `r ind_resultsTab[which.max(ind_resultsTab$Acc_test),]`
+
+## Unweighted Ensembl Classifier
+
+I used majority voting among the five classifiers. The code is attached below.
+
+```{r,tidy=TRUE}
+#combine predictions
+comm_preds <- data.frame(dt_pred_res,nb_pred_res,lr_pred_res,knn_pred_res,nn_pred_res)
+
+#do majority voting
+require(functional)
+maj_vot_5<-as.factor(apply(comm_preds, 1, Compose(table,
+                    function(i) i==max(i),
+                    which,
+                    names,
+                    function(i) paste0(i, collapse='/')
+)
+))
+maj_vot_5_acc<-0
+correct<-0
+for (i in (1:length(maj_vot_5))){
+  if(maj_vot_5[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+maj_vot_5_acc <- (correct)/length(maj_vot_5)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Majority voting",maj_vot_5_acc,0)
+```
+
+Accuraccy acheived by majority voting is `r maj_vot_5_acc`
+
+### Majority voting confusion matrix
+
+```{r,tidy=TRUE}
+confusionMatrix(maj_vot_5,lab3_test[,5])
+```
+
+
+
+## Weighted Ensembl Classifier
+
+Here i took the weighted mean of outputs from each classifier. The weights were propotional to each classifiers accuraccy on the test set. I used the softmax function to calculate weight of each classifier based on its accuraccy.
+
+```{r,tidy=TRUE}
+
+##weighted voting get prob out puts
+nn_preds_prob<-predict(nnet_model, lab3_test,type = "prob")
+knn_preds_prob<-predict(knn_model, lab3_test,type = "prob")
+lr_preds_prob<-predict(lr_model, lab3_test,type = "prob")
+nb_preds_prob<-predict(nb_model, lab3_test,type = "prob")
+dt_preds_prob<-predict(dt_model, lab3_test,type = "prob")
+
+#get weights
+#def softmax
+softmax <- function(x) exp(x) / sum(exp(x))
+total_wt=dt_test_acc+nb_test_acc+knn_test_acc+lr_test_acc+nn_test_acc
+wt_softmax<-softmax(c(dt_test_acc,nb_test_acc,knn_test_acc,lr_test_acc,nn_test_acc))
+dt_wt<-wt_softmax[1]
+nb_wt<-wt_softmax[2]
+knn_wt<-wt_softmax[3]
+lr_wt<-wt_softmax[4]
+nn_wt<-wt_softmax[5]
+
+##combine all prob of NO in a dataframe
+comm_preds_prob <- data.frame(nn_preds_prob[,1]*nn_wt,knn_preds_prob[,1]*knn_wt,lr_preds_prob[,1]*lr_wt,nb_preds_prob[,1]*nb_wt,dt_preds_prob[,1]*dt_wt)
+wt_comm_preds <- as.factor(ifelse(rowSums(comm_preds_prob) > 0.5, "No", "Yes"))
+
+wt_maj_vot_5_acc<-0
+correct<-0
+for (i in (1:length(wt_comm_preds))){
+  if(wt_comm_preds[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+wt_maj_vot_5_acc <- (correct)/length(wt_comm_preds)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Weighted Majority voting",wt_maj_vot_5_acc,0)
+ind_resultsTab %>% knitr::kable(caption = "Accuraccy comparision of indiviual and Ensembl classifiers")
+```
+
+Accuraccy acheived by Weighted Ensemble is `r wt_maj_vot_5_acc`
+
+### Weighted Ensemble confusion matrix
+
+```{r,tidy=TRUE}
+confusionMatrix(wt_comm_preds,lab3_test[,5])
+```
+
+## Conclusion
+We expect that weighted majority voting should be the best among all the classifiers as ensembl classifiers can combine knowledge from different classifiers. From Table 3. we can see that the overall highest accuracy was acheived by `r ind_resultsTab[which.max(ind_resultsTab$Acc_test),]`. 
+
+
+# Solution 3
+
+I added my best RF and AdaBoost models to the ensembl learners.
+
+
+## Unweighted Ensembl Classifier with Seven models
+
+I used majority voting among all the seven classifiers. The code is attached below.
+
+```{r,tidy=TRUE}
+
+
+#combine predictions
+comm_preds <-
+  data.frame(dt_pred_res,
+             nb_pred_res,
+             lr_pred_res,
+             knn_pred_res,
+             nn_pred_res,rf_preds,ada_preds)
+
+#do majority voting
+require(functional)
+maj_vot_7 <- as.factor(apply(
+  comm_preds,
+  1,
+  Compose(table,
+          function(i)
+            i == max(i),
+          which,
+          names,
+          function(i)
+            paste0(i, collapse = '/'))
+))
+maj_vot_7_acc <- 0
+correct <- 0
+for (i in (1:length(maj_vot_7))) {
+  if (maj_vot_7[i] == lab3_test$Class[i]) {
+    correct = correct + 1
+  }
+}
+maj_vot_7_acc <- (correct) / length(maj_vot_7)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Majority voting_ALL",maj_vot_7_acc,0)
+ind_resultsTab %>% knitr::kable(caption = "Accuraccy comparision of indiviual and Ensembl classifiers (seven classifiers)")
+```
+
+Accuraccy acheived by majority voting is `r maj_vot_5_acc`
+
+### Majority voting confusion matrix
+
+```{r,tidy=TRUE}
+confusionMatrix(maj_vot_7,lab3_test[,5])
+```
+
+## Weighted Ensembl Classifier
+
+Here i took the weighted mean of outputs from each classifier. The weights were propotional to each classifiers accuraccy on the test set. I used the softmax function to calculate weight of each classifier based on its accuraccy. Table 4 shows the weights used to weight each classifier.
+
+```{r,tidy=TRUE}
+
+##weighted voting get prob out puts
+nn_preds_prob<-predict(nnet_model, lab3_test,type = "prob")
+knn_preds_prob<-predict(knn_model, lab3_test,type = "prob")
+lr_preds_prob<-predict(lr_model, lab3_test,type = "prob")
+nb_preds_prob<-predict(nb_model, lab3_test,type = "prob")
+dt_preds_prob<-predict(dt_model, lab3_test,type = "prob")
+rf_preds_prob <-predict(rf_model, lab3_test,type = "prob")
+ada_preds_prob <-predict(ada_model, lab3_test,type = "prob")
+
+#get weights
+#def softmax
+softmax <- function(x) exp(x) / sum(exp(x))
+wt_softmax<-softmax(c(dt_test_acc,nb_test_acc,knn_test_acc,lr_test_acc,nn_test_acc,ada_test_acc,rf_test_acc))
+dt_wt<-wt_softmax[1]
+nb_wt<-wt_softmax[2]
+knn_wt<-wt_softmax[3]
+lr_wt<-wt_softmax[4]
+nn_wt<-wt_softmax[5]
+ada_wt<-wt_softmax[6]
+rf_wt<-wt_softmax[7]
+
+##combine all prob of NO in a dataframe
+comm_preds_prob <- data.frame(nn_preds_prob[,1]*nn_wt,knn_preds_prob[,1]*knn_wt,lr_preds_prob[,1]*lr_wt,nb_preds_prob[,1]*nb_wt,dt_preds_prob[,1]*dt_wt,ada_preds_prob[,1]*ada_wt,rf_preds_prob[,1]*rf_wt)
+wt_comm_preds <- as.factor(ifelse(rowSums(comm_preds_prob) > 0.5, "No", "Yes"))
+
+wt_maj_vot_7_acc<-0
+correct<-0
+for (i in (1:length(wt_comm_preds))){
+  if(wt_comm_preds[i]==lab3_test$Class[i]){
+    correct=correct+1
+  }
+}
+wt_maj_vot_7_acc <- (correct)/length(wt_comm_preds)
+ind_resultsTab[nrow(ind_resultsTab)+1,] <- c("Weighted Majority voting_ALL",wt_maj_vot_7_acc,0)
+ind_resultsTab %>% knitr::kable(caption = "Accuraccy comparision of indiviual and Ensembl classifiers")
+```
+
+Accuraccy acheived by weighted voting using all models is `r wt_maj_vot_7_acc`
+
+### Weighted Ensemble confusion matrix using all models
+
+```{r,tidy=TRUE}
+confusionMatrix(wt_comm_preds,lab3_test[,5])
+```
+
+```{r,tidy=TRUE}
+header4<-c("Model","Weight")
+wt_resultsTab<-data.frame(matrix(ncol = 2, nrow = 0))
+colnames(wt_resultsTab)<-header4
+wt_resultsTab[1,] <- c("Neural Net",nn_wt)
+wt_resultsTab[2,] <- c("KNN",knn_wt)
+wt_resultsTab[3,] <- c("Naive Bayes",nb_wt)
+wt_resultsTab[4,] <- c("Logistic Regression",lr_wt)
+wt_resultsTab[5,] <- c("Decision Tree",dt_wt)
+wt_resultsTab[6,] <- c("ADA",ada_wt)
+wt_resultsTab[7,] <- c("RF",rf_wt)
+wt_resultsTab %>% knitr::kable(caption = "Weights assigned to different classifiers in weighted Ensemble method")
+
+```
+
+
+Overall the maximum accuraccy was acheived by `r ind_resultsTab[which.max(ind_resultsTab$Acc_test),]`. 
+
+# Conclusion
+
+We expect the performance of weighted ensemble to be the best. When running the code I found that most of the time majority voting over all classifiers and weighted ensemble of all classifier performed best. Thus, we can say an ensemble of classifiers are better than using individual classifiers. I did not see much difference between weighted and un-weighted ensemble classifiers. This may be because of the weigths i am assiging to the classifiers. My weights are directly propotional to the classification accuraccy of individual classifiers. Since, all classifiers perform with almost same accuraccy, my weights are almost same for each classifiers which is almost like having a majority voting. If I decide to implement a more sophisticated weight scheme I would see some more difference in classification.
+
+
+
+
